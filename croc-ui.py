@@ -10,6 +10,7 @@ import atexit
 
 class CrocApp:
     def __init__(self):
+        self.receive_text = None
         self.output_text = []
         self.current_process = None
         self.process_running = False
@@ -20,14 +21,19 @@ class CrocApp:
         self.file_list = None
         self.croc_code = None
         self.add_files_button = None
+        self.copy_button = None
         self.send_button = None
         self.code_text = None
         self.output_expander = None
         self.terminate_button = None
-        atexit.register(self.cleanup)  # Register cleanup function
+        self.current_view = "send"  # Track current view
+        self.send_toggle = None
+        self.receive_toggle = None
+        self.main_column = None
+        self.terminate_button_visible = False
+        atexit.register(self.cleanup)
 
     def cleanup(self):
-        """Ensure croc process is terminated when app closes"""
         if self.current_process:
             try:
                 self.current_process.terminate()
@@ -36,10 +42,24 @@ class CrocApp:
                 if self.current_process:
                     self.current_process.kill()
 
+    def switch_view(self, view):
+        self.current_view = view
+        if view == "send":
+            self.send_toggle.style.color = ft.colors.ON_SURFACE
+            self.receive_toggle.style.color = ft.colors.ON_SURFACE_VARIANT
+            self.main_column.visible = True
+            self.receive_text.visible = False
+        else:  # receive view
+            self.send_toggle.style.color = ft.colors.ON_SURFACE_VARIANT
+            self.receive_toggle.style.color = ft.colors.ON_SURFACE
+            self.main_column.visible = False
+            self.receive_text.visible = True
+        self.page.update()
+
     def run_croc_command(self, command):
         try:
             self.process_running = True
-            self.toggle_buttons(False)  # Disable buttons when process starts
+            self.toggle_buttons(False)
             print(f"Starting command: {command}")
 
             self.current_process = subprocess.Popen(
@@ -55,7 +75,6 @@ class CrocApp:
                 print(f"Raw output: {line}")
                 if line.strip():
                     self.output_text.append(line.strip())
-                    # Check for croc code in output
                     if "Code is:" in line:
                         code_match = re.search(r"Code is: (.+)", line)
                         if code_match:
@@ -80,22 +99,24 @@ class CrocApp:
                 self.update_output()
         finally:
             self.process_running = False
-            self.toggle_buttons(True)  # Enable buttons when process ends
+            self.toggle_buttons(True)
             self.current_process = None
 
     def toggle_buttons(self, enabled):
         if self.add_files_button and self.send_button:
             self.add_files_button.disabled = not enabled
             self.send_button.disabled = not enabled
-            self.terminate_button.disabled = (
-                enabled  # Enable terminate only when process is running
-            )
+            self.terminate_button.disabled = enabled
+            self.terminate_button.visible = not enabled
             self.page.update()
 
     def update_code_display(self):
         if self.code_text and self.croc_code:
             self.code_text.value = f"Code: {self.croc_code}"
+            self.code_text.visible = True
+            self.copy_button.visible = True
             self.code_text.update()
+            self.copy_button.update()
 
     def start_croc_command(self, e):
         if not self.process_running:
@@ -145,6 +166,74 @@ class CrocApp:
                 self.selected_files.append(file.path)
             self.update_file_list()
 
+    def check_croc_running(self):
+        if sys.platform == "win32":
+            cmd = 'tasklist /FI "IMAGENAME eq croc.exe" /NH'
+            output = subprocess.check_output(cmd, shell=True).decode()
+            return "croc.exe" in output
+        else:
+            try:
+                cmd = "pgrep croc"
+                subprocess.check_output(cmd, shell=True)
+                return True
+            except subprocess.CalledProcessError:
+                return False
+
+    def show_croc_running_dialog(self):
+        def close_croc():
+            if sys.platform == "win32":
+                os.system("taskkill /F /IM croc.exe 2>NUL")
+            else:
+                os.system("pkill -9 croc 2>/dev/null")
+            dialog.open = False
+            self.page.update()
+
+        def close_warning_dialog(warning_dialog):
+            warning_dialog.open = False
+            self.page.update()
+
+        def show_warning():
+            dialog.open = False
+            self.page.update()
+            warning_dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Warning"),
+                content=ft.Text(
+                    "Multiple croc sessions running in background may impact system performance."
+                ),
+                actions=[
+                    ft.TextButton(
+                        "OK",
+                        on_click=lambda _: close_warning_dialog(warning_dialog),
+                    ),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            self.page.overlay.append(warning_dialog)
+            warning_dialog.open = True
+            # self.page.dialog = warning_dialog
+            self.page.update()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Croc Process Running"),
+            content=ft.Text(
+                "A Croc process is already running in the background. "
+                "This might interfere with the application. "
+                "Would you like to close it?"
+            ),
+            actions=[
+                ft.TextButton("Yes", on_click=lambda _: close_croc()),
+                ft.TextButton("No", on_click=lambda _: show_warning()),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        # self.page.dialog = dialog
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+
     def update_file_list(self):
         self.file_list.controls.clear()
         for file in self.selected_files:
@@ -175,10 +264,9 @@ class CrocApp:
 
     def copy_code_to_clipboard(self, e):
         if self.croc_code:
-            # Format code based on OS
             if sys.platform == "win32":
                 clipboard_text = f"croc {self.croc_code}"
-            else:  # Linux and MacOS
+            else:
                 clipboard_text = f'CROC_SECRET="{self.croc_code}" croc'
 
             pyperclip.copy(clipboard_text)
@@ -188,12 +276,15 @@ class CrocApp:
 
     def terminate_process(self, e):
         if self.current_process:
+            self.code_text.visible = False
+            self.terminate_button.visible = False
+            self.copy_button.visible = False
+            self.code_text.update()
+            self.copy_button.update()
             try:
-                # First try to terminate gracefully
                 self.current_process.terminate()
                 self.current_process.wait(timeout=1)
             except:
-                # If termination fails, force kill
                 if self.current_process:
                     self.current_process.kill()
 
@@ -203,7 +294,6 @@ class CrocApp:
             self.toggle_buttons(True)
             self.current_process = None
 
-            # Additional cleanup for croc processes
             if sys.platform == "win32":
                 os.system("taskkill /F /IM croc.exe 2>NUL")
             else:
@@ -217,20 +307,32 @@ class CrocApp:
         page.window.maximizable = False
         page.scroll = "adaptive"
         page.title = "Croc GUI"
-        page.theme_mode = ft.ThemeMode.DARK  # Set dark mode as default
+        page.theme_mode = ft.ThemeMode.DARK
         page.theme = ft.Theme(
             color_scheme=ft.ColorScheme(
                 primary=ft.colors.TEAL,
             )
         )
+        page.window.prevent_close = False
+        page.window.icon = "./assets/crocodile.svg"
+
+        if self.check_croc_running():
+            self.page = page
+            self.show_croc_running_dialog()
 
         # File Picker
         self.file_picker = ft.FilePicker(on_result=self.pick_files_result)
         page.overlay.append(self.file_picker)
 
-        # Title Row
+        # Title Row with Toggle
         title_row = ft.Row(
             [
+                ft.Image(
+                    src="./assets/crocodile.svg",
+                    width=30,
+                    height=30,
+                    color=ft.colors.ON_SURFACE,
+                ),
                 ft.Text("Croc GUI", size=24, weight=ft.FontWeight.BOLD),
                 ft.IconButton(
                     icon=ft.icons.LIGHT_MODE,
@@ -239,6 +341,32 @@ class CrocApp:
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        # Toggle Buttons Row
+        self.send_toggle = ft.TextButton(
+            text="Send",
+            style=ft.ButtonStyle(
+                color=ft.colors.ON_SURFACE,
+            ),
+            on_click=lambda _: self.switch_view("send"),
+        )
+
+        self.receive_toggle = ft.TextButton(
+            text="Receive",
+            style=ft.ButtonStyle(
+                color=ft.colors.ON_SURFACE_VARIANT,
+            ),
+            on_click=lambda _: self.switch_view("receive"),
+        )
+
+        toggle_row = ft.Row(
+            [
+                self.send_toggle,
+                ft.Text("|", size=16, color=ft.colors.ON_SURFACE_VARIANT),
+                self.receive_toggle,
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
         )
 
         # Files Label
@@ -279,15 +407,19 @@ class CrocApp:
         )
 
         # Code Display Section
-        self.code_text = ft.Text("Code: ", size=16, weight=ft.FontWeight.BOLD)
-        copy_button = ft.IconButton(
+        self.code_text = ft.Text(
+            "Code: ", size=16, weight=ft.FontWeight.BOLD, visible=False
+        )
+        self.copy_button = ft.IconButton(
             icon=ft.icons.COPY,
             on_click=self.copy_code_to_clipboard,
             tooltip="Copy code",
+            visible=False,
         )
 
         code_container = ft.Row(
-            [self.code_text, copy_button], alignment=ft.MainAxisAlignment.START
+            [self.code_text, self.copy_button],
+            alignment=ft.MainAxisAlignment.START,
         )
 
         # Terminate Button
@@ -297,6 +429,7 @@ class CrocApp:
             on_click=self.terminate_process,
             tooltip="Terminate process",
             disabled=True,
+            visible=False,
         )
 
         # Output Section with Expander
@@ -318,22 +451,41 @@ class CrocApp:
             initially_expanded=False,
         )
 
+        # Main content column
+        self.main_column = ft.Column(
+            [
+                files_label,
+                self.add_files_button,
+                file_list_container,
+                self.send_button,
+                code_container,
+                ft.Row(
+                    [ft.Text(""), self.terminate_button],
+                    alignment=ft.MainAxisAlignment.END,
+                ),
+                self.output_expander,
+            ],
+            spacing=15,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
+        )
+
+        # Receive view text
+        self.receive_text = ft.Text(
+            "Feature under development",
+            size=16,
+            color=ft.colors.ON_SURFACE_VARIANT,
+            visible=False,
+        )
+
         # Main Layout
         page.add(
             ft.Container(
                 content=ft.Column(
                     [
                         title_row,
-                        files_label,
-                        self.add_files_button,
-                        file_list_container,
-                        self.send_button,
-                        code_container,
-                        ft.Row(
-                            [ft.Text(""), self.terminate_button],
-                            alignment=ft.MainAxisAlignment.END,
-                        ),
-                        self.output_expander,
+                        toggle_row,
+                        self.main_column,
+                        self.receive_text,
                     ],
                     spacing=15,
                     horizontal_alignment=ft.CrossAxisAlignment.START,
@@ -347,7 +499,11 @@ class CrocApp:
 
 def main():
     app = CrocApp()
-    ft.app(target=app.main)
+    ft.app(
+        target=app.main,
+        assets_dir="assets",
+        web_renderer="html",
+    )
 
 
 if __name__ == "__main__":
