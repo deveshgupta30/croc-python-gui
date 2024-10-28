@@ -21,7 +21,6 @@ class CrocApp:
         self.send_button = None
         self.code_text = None
         self.output_expander = None
-        self.terminate_button = None
 
     def run_croc_command(self, command):
         try:
@@ -74,7 +73,6 @@ class CrocApp:
         if self.add_files_button and self.send_button:
             self.add_files_button.disabled = not enabled
             self.send_button.disabled = not enabled
-            self.terminate_button.disabled = enabled  # Enable terminate only when process is running
             self.page.update()
 
     def update_code_display(self):
@@ -111,17 +109,8 @@ class CrocApp:
     def toggle_theme(self, e):
         if self.page.theme_mode == ft.ThemeMode.LIGHT:
             self.page.theme_mode = ft.ThemeMode.DARK
-            self.update_background()
         else:
             self.page.theme_mode = ft.ThemeMode.LIGHT
-            self.update_background()
-        self.page.update()
-
-    def update_background(self):
-        if self.page.theme_mode == ft.ThemeMode.LIGHT:
-            self.page.bgcolor = ft.colors.TEAL_50
-        else:
-            self.page.bgcolor = None
         self.page.update()
 
     def pick_files_result(self, e: ft.FilePickerResultEvent):
@@ -181,13 +170,8 @@ class CrocApp:
     def main(self, page: ft.Page):
         self.page = page
         page.title = "Croc Send"
-        page.theme_mode = ft.ThemeMode.DARK  # Set dark mode as default
-        page.theme = ft.Theme(
-            color_scheme=ft.ColorScheme(
-                primary=ft.colors.TEAL,
-                surface_tint=ft.colors.TEAL_50,
-            )
-        )
+        page.theme_mode = ft.ThemeMode.LIGHT
+        page.theme = ft.Theme(color_scheme=ft.ColorScheme(primary=ft.colors.TEAL))
         page.window_width = 500
         page.window_height = 800
         page.window_resizable = False
@@ -214,7 +198,7 @@ class CrocApp:
         # Selected Files Section
         files_label = ft.Text("Selected files", size=16, weight=ft.FontWeight.BOLD)
 
-                self.add_files_button = ft.ElevatedButton(
+        self.add_files_button = ft.ElevatedButton(
             "Add files",
             icon=ft.icons.ADD_ROUNDED,
             on_click=lambda _: self.file_picker.pick_files(allow_multiple=True),
@@ -231,7 +215,7 @@ class CrocApp:
 
         file_list_container = ft.Container(
             content=self.file_list,
-            bgcolor=ft.colors.with_opacity(0.1, ft.colors.ON_SURFACE),
+            bgcolor=ft.colors.BLACK12,
             padding=10,
             border_radius=8,
             width=440,
@@ -242,7 +226,6 @@ class CrocApp:
             icon=ft.icons.SEND_ROUNDED,
             on_click=self.start_croc_command,
             style=ft.ButtonStyle(
-                color=ft.colors.ON_PRIMARY,
                 bgcolor={ft.MaterialState.DEFAULT: ft.colors.TEAL},
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
@@ -261,22 +244,23 @@ class CrocApp:
         )
 
         # Terminate Button
-        self.terminate_button = ft.IconButton(
+        terminate_button = ft.IconButton(
             icon=ft.icons.CLOSE,
             icon_color=ft.colors.RED,
             on_click=self.terminate_process,
             tooltip="Terminate process",
-            disabled=True,
         )
 
         # Output Section with Expander
+        output_label = ft.Text("Output", size=16, weight=ft.FontWeight.BOLD)
+
         self.output_control = ft.Column(
-            scroll=ft.ScrollMode.AUTO, height=300, spacing=2
+            scroll=ft.ScrollMode.AUTO, height=200, spacing=2
         )
 
         output_container = ft.Container(
             content=self.output_control,
-            bgcolor=ft.colors.with_opacity(0.1, ft.colors.ON_SURFACE),
+            bgcolor=ft.colors.BLACK12,
             padding=10,
             border_radius=8,
             width=440,
@@ -285,7 +269,7 @@ class CrocApp:
         self.output_expander = ft.ExpansionTile(
             title=ft.Text("Output"),
             controls=[output_container],
-            initially_expanded=False,
+            initially_expanded=True,
         )
 
         # Main Layout
@@ -294,15 +278,13 @@ class CrocApp:
                 content=ft.Column(
                     [
                         title_row,
+                        ft.Divider(height=1),
                         files_label,
                         self.add_files_button,
                         file_list_container,
                         self.send_button,
                         code_container,
-                        ft.Row(
-                            [ft.Text(""), self.terminate_button],
-                            alignment=ft.MainAxisAlignment.END,
-                        ),
+                        terminate_button,
                         self.output_expander,
                     ],
                     spacing=15,
@@ -311,8 +293,6 @@ class CrocApp:
                 padding=20,
             )
         )
-
-        self.update_background()
 
 
 def main():
