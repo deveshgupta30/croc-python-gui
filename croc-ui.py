@@ -100,7 +100,7 @@ class CrocApp:
     def start_croc_command(self, e):
         if not self.process_running:
             if not self.selected_files:
-                self.page.show_snack_bar(
+                self.page.open(
                     ft.SnackBar(content=ft.Text("Please select files to send."))
                 )
                 return
@@ -115,7 +115,7 @@ class CrocApp:
                 target=self.run_croc_command, args=(command,), daemon=True
             ).start()
         else:
-            self.page.show_snack_bar(
+            self.page.open(
                 ft.SnackBar(
                     content=ft.Text(
                         "A command is already running. Please wait for it to finish."
@@ -182,13 +182,9 @@ class CrocApp:
                 clipboard_text = f'CROC_SECRET="{self.croc_code}" croc'
 
             pyperclip.copy(clipboard_text)
-            self.page.show_snack_bar(
-                ft.SnackBar(content=ft.Text("Code copied to clipboard!"))
-            )
+            self.page.open(ft.SnackBar(content=ft.Text("Code copied to clipboard!")))
         else:
-            self.page.show_snack_bar(
-                ft.SnackBar(content=ft.Text("No code available to copy."))
-            )
+            self.page.open(ft.SnackBar(content=ft.Text("No code available to copy.")))
 
     def terminate_process(self, e):
         if self.current_process:
@@ -215,7 +211,12 @@ class CrocApp:
 
     def main(self, page: ft.Page):
         self.page = page
-        page.title = "Croc Send"
+        page.window.width = 480
+        page.window.height = 700
+        page.window.resizable = False
+        page.window.maximizable = False
+        page.scroll = "adaptive"
+        page.title = "Croc GUI"
         page.theme_mode = ft.ThemeMode.DARK  # Set dark mode as default
         page.theme = ft.Theme(
             color_scheme=ft.ColorScheme(
@@ -230,7 +231,7 @@ class CrocApp:
         # Title Row
         title_row = ft.Row(
             [
-                ft.Text("Croc Send", size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("Croc GUI", size=24, weight=ft.FontWeight.BOLD),
                 ft.IconButton(
                     icon=ft.icons.LIGHT_MODE,
                     on_click=self.toggle_theme,
@@ -272,7 +273,7 @@ class CrocApp:
             on_click=self.start_croc_command,
             style=ft.ButtonStyle(
                 color=ft.colors.ON_PRIMARY,
-                bgcolor={ft.MaterialState.DEFAULT: ft.colors.TEAL},
+                bgcolor={ft.ControlState.DEFAULT: ft.colors.TEAL},
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
         )
