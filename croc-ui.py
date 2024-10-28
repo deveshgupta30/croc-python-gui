@@ -3,6 +3,7 @@ import subprocess
 import threading
 import os
 import pyperclip
+import re
 
 
 class CrocApp:
@@ -15,11 +16,16 @@ class CrocApp:
         self.selected_files = []
         self.file_picker = None
         self.file_list = None
-        self.croc_code = "123456"  # This should be updated with the actual croc code
+        self.croc_code = None
+        self.add_files_button = None
+        self.send_button = None
+        self.code_text = None
+        self.output_expander = None
 
     def run_croc_command(self, command):
         try:
             self.process_running = True
+            self.toggle_buttons(False)  # Disable buttons when process starts
             print(f"Starting command: {command}")
 
             self.current_process = subprocess.Popen(
@@ -35,6 +41,12 @@ class CrocApp:
                 print(f"Raw output: {line}")
                 if line.strip():
                     self.output_text.append(line.strip())
+                    # Check for croc code in output
+                    if "Code is:" in line:
+                        code_match = re.search(r"Code is: (.+)", line)
+                        if code_match:
+                            self.croc_code = code_match.group(1)
+                            self.update_code_display()
                     if self.page:
                         self.page.update()
                         self.update_output()
@@ -54,7 +66,19 @@ class CrocApp:
                 self.update_output()
         finally:
             self.process_running = False
+            self.toggle_buttons(True)  # Enable buttons when process ends
             self.current_process = None
+
+    def toggle_buttons(self, enabled):
+        if self.add_files_button and self.send_button:
+            self.add_files_button.disabled = not enabled
+            self.send_button.disabled = not enabled
+            self.page.update()
+
+    def update_code_display(self):
+        if self.code_text and self.croc_code:
+            self.code_text.value = f"Code: {self.croc_code}"
+            self.code_text.update()
 
     def start_croc_command(self, e):
         if not self.process_running:
@@ -68,7 +92,7 @@ class CrocApp:
             self.update_output()
 
             file_paths = " ".join(f'"{file}"' for file in self.selected_files)
-            command = f'croc send --code "{self.croc_code}" {file_paths}'
+            command = f"croc send {file_paths}"
 
             threading.Thread(
                 target=self.run_croc_command, args=(command,), daemon=True
@@ -82,58 +106,90 @@ class CrocApp:
                 )
             )
 
-    def update_output(self):
-        if self.output_control and self.page:
-            self.output_control.controls = [
-                ft.Text(line, size=12) for line in self.output_text
-            ]
-            self.output_control.update()
+    def toggle_theme(self, e):
+        if self.page.theme_mode == ft.ThemeMode.LIGHT:
+            self.page.theme_mode = ft.ThemeMode.DARK
+        else:
+            self.page.theme_mode = ft.ThemeMode.LIGHT
+        self.page.update()
 
     def pick_files_result(self, e: ft.FilePickerResultEvent):
         if e.files:
-            self.selected_files.extend([file.path for file in e.files])
+            for file in e.files:
+                self.selected_files.append(file.path)
             self.update_file_list()
 
     def update_file_list(self):
-        if self.file_list:
-            self.file_list.controls = [
+        self.file_list.controls.clear()
+        for file in self.selected_files:
+            self.file_list.controls.append(
                 ft.Row(
                     [
-                        ft.Text(os.path.basename(current_file), expand=True),
+                        ft.Text(os.path.basename(file), size=12, expand=True),
                         ft.IconButton(
-                            ft.icons.DELETE,
-                            data=current_file,
-                            on_click=lambda e: self.remove_file(e.control.data),
+                            icon=ft.icons.DELETE_OUTLINE,
+                            on_click=lambda _, file=file: self.remove_file(file),
+                            tooltip="Remove file",
                         ),
-                    ]
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 )
-                for current_file in self.selected_files
-            ]
-            self.file_list.update()
+            )
+        self.page.update()
 
     def remove_file(self, file):
-        print(f"Removing file: {file}")
-        if file in self.selected_files:
-            self.selected_files.remove(file)
-            self.update_file_list()
+        self.selected_files.remove(file)
+        self.update_file_list()
+
+    def update_output(self):
+        self.output_control.controls = [
+            ft.Text(line, size=12) for line in self.output_text[-100:]
+        ]
+        self.output_control.update()
 
     def copy_code_to_clipboard(self, e):
-        if hasattr(self, "croc_code") and self.croc_code:
+        if self.croc_code:
             pyperclip.copy(self.croc_code)
             self.page.show_snack_bar(
                 ft.SnackBar(content=ft.Text("Code copied to clipboard!"))
             )
+        else:
+            self.page.show_snack_bar(
+                ft.SnackBar(content=ft.Text("No code available to copy."))
+            )
+
+    def terminate_process(self, e):
+        if self.current_process:
+            self.current_process.terminate()
+            self.output_text.append("Process terminated.")
+            self.update_output()
+            self.process_running = False
+            self.toggle_buttons(True)
+            self.current_process = None
 
     def main(self, page: ft.Page):
         self.page = page
         page.title = "Croc Send"
         page.theme_mode = ft.ThemeMode.LIGHT
-        page.window_width = 480
-        page.window_height = 640
+        page.theme = ft.Theme(color_scheme=ft.ColorScheme(primary=ft.colors.TEAL))
+        page.window_width = 500
+        page.window_height = 800
         page.window_resizable = False
+        page.scroll = ft.ScrollMode.AUTO
 
-        # Title
-        title = ft.Text("Send", size=24, weight=ft.FontWeight.BOLD)
+        # Theme Toggle Button
+        theme_toggle = ft.IconButton(
+            icon=ft.icons.LIGHT_MODE,
+            on_click=self.toggle_theme,
+            tooltip="Toggle theme",
+            animate_rotation=ft.animation.Animation(300, ft.AnimationCurve.BOUNCE_OUT),
+        )
+
+        # Title Row with Theme Toggle
+        title_row = ft.Row(
+            [ft.Text("Send", size=24, weight=ft.FontWeight.BOLD), theme_toggle],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
 
         # File Picker
         self.file_picker = ft.FilePicker(on_result=self.pick_files_result)
@@ -142,7 +198,7 @@ class CrocApp:
         # Selected Files Section
         files_label = ft.Text("Selected files", size=16, weight=ft.FontWeight.BOLD)
 
-        add_files_button = ft.ElevatedButton(
+        self.add_files_button = ft.ElevatedButton(
             "Add files",
             icon=ft.icons.ADD_ROUNDED,
             on_click=lambda _: self.file_picker.pick_files(allow_multiple=True),
@@ -165,52 +221,41 @@ class CrocApp:
             width=440,
         )
 
-        # Send Button
-        send_button = ft.ElevatedButton(
+        self.send_button = ft.ElevatedButton(
             "Send",
             icon=ft.icons.SEND_ROUNDED,
             on_click=self.start_croc_command,
             style=ft.ButtonStyle(
-                color={ft.MaterialState.DEFAULT: ft.colors.WHITE},
-                bgcolor={ft.MaterialState.DEFAULT: ft.colors.BLUE},
+                bgcolor={ft.MaterialState.DEFAULT: ft.colors.TEAL},
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
-            width=440,
         )
 
-        # Croc Code Section
-        code_container = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Text(
-                        f"Code: {self.croc_code}",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        expand=True,
-                    ),
-                    ft.IconButton(
-                        icon=ft.icons.SHARE_ROUNDED,
-                        on_click=self.copy_code_to_clipboard,
-                        tooltip="Copy code to clipboard",
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            ),
-            bgcolor=ft.colors.BLUE_50,
-            padding=10,
-            border_radius=8,
-            width=440,
+        # Code Display Section
+        self.code_text = ft.Text("Code: ", size=16, weight=ft.FontWeight.BOLD)
+        copy_button = ft.IconButton(
+            icon=ft.icons.COPY,
+            on_click=self.copy_code_to_clipboard,
+            tooltip="Copy code",
         )
 
-        # Output Section
-        output_label = ft.Text("Command output", size=16, weight=ft.FontWeight.BOLD)
+        code_container = ft.Row(
+            [self.code_text, copy_button], alignment=ft.MainAxisAlignment.START
+        )
+
+        # Terminate Button
+        terminate_button = ft.IconButton(
+            icon=ft.icons.CLOSE,
+            icon_color=ft.colors.RED,
+            on_click=self.terminate_process,
+            tooltip="Terminate process",
+        )
+
+        # Output Section with Expander
+        output_label = ft.Text("Output", size=16, weight=ft.FontWeight.BOLD)
 
         self.output_control = ft.Column(
-            [ft.Text("Waiting for command to start...", size=12)],
-            scroll=ft.ScrollMode.ALWAYS,
-            height=200,
-            width=440,
-            auto_scroll=True,
+            scroll=ft.ScrollMode.AUTO, height=200, spacing=2
         )
 
         output_container = ft.Container(
@@ -221,20 +266,26 @@ class CrocApp:
             width=440,
         )
 
+        self.output_expander = ft.ExpansionTile(
+            title=ft.Text("Output"),
+            controls=[output_container],
+            initially_expanded=True,
+        )
+
         # Main Layout
         page.add(
             ft.Container(
                 content=ft.Column(
                     [
-                        title,
+                        title_row,
                         ft.Divider(height=1),
                         files_label,
-                        add_files_button,
+                        self.add_files_button,
                         file_list_container,
-                        send_button,
+                        self.send_button,
                         code_container,
-                        output_label,
-                        output_container,
+                        terminate_button,
+                        self.output_expander,
                     ],
                     spacing=15,
                     horizontal_alignment=ft.CrossAxisAlignment.START,
