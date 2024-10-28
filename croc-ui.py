@@ -4,6 +4,8 @@ import threading
 import os
 import pyperclip
 import re
+import sys
+import atexit
 
 
 class CrocApp:
@@ -22,6 +24,17 @@ class CrocApp:
         self.code_text = None
         self.output_expander = None
         self.terminate_button = None
+        atexit.register(self.cleanup)  # Register cleanup function
+
+    def cleanup(self):
+        """Ensure croc process is terminated when app closes"""
+        if self.current_process:
+            try:
+                self.current_process.terminate()
+                self.current_process.wait(timeout=1)
+            except:
+                if self.current_process:
+                    self.current_process.kill()
 
     def run_croc_command(self, command):
         try:
@@ -162,7 +175,13 @@ class CrocApp:
 
     def copy_code_to_clipboard(self, e):
         if self.croc_code:
-            pyperclip.copy(self.croc_code)
+            # Format code based on OS
+            if sys.platform == "win32":
+                clipboard_text = f"croc {self.croc_code}"
+            else:  # Linux and MacOS
+                clipboard_text = f'CROC_SECRET="{self.croc_code}" croc'
+
+            pyperclip.copy(clipboard_text)
             self.page.show_snack_bar(
                 ft.SnackBar(content=ft.Text("Code copied to clipboard!"))
             )
@@ -173,12 +192,26 @@ class CrocApp:
 
     def terminate_process(self, e):
         if self.current_process:
-            self.current_process.terminate()
+            try:
+                # First try to terminate gracefully
+                self.current_process.terminate()
+                self.current_process.wait(timeout=1)
+            except:
+                # If termination fails, force kill
+                if self.current_process:
+                    self.current_process.kill()
+
             self.output_text.append("Process terminated.")
             self.update_output()
             self.process_running = False
             self.toggle_buttons(True)
             self.current_process = None
+
+            # Additional cleanup for croc processes
+            if sys.platform == "win32":
+                os.system("taskkill /F /IM croc.exe 2>NUL")
+            else:
+                os.system("pkill -9 croc 2>/dev/null")
 
     def main(self, page: ft.Page):
         self.page = page
@@ -187,34 +220,28 @@ class CrocApp:
         page.theme = ft.Theme(
             color_scheme=ft.ColorScheme(
                 primary=ft.colors.TEAL,
-                surface_tint=ft.colors.TEAL_50,
             )
-        )
-        page.window_width = 500
-        page.window_height = 800
-        page.window_resizable = False
-        page.scroll = ft.ScrollMode.AUTO
-
-        # Theme Toggle Button
-        theme_toggle = ft.IconButton(
-            icon=ft.icons.LIGHT_MODE,
-            on_click=self.toggle_theme,
-            tooltip="Toggle theme",
-            animate_rotation=ft.animation.Animation(300, ft.AnimationCurve.BOUNCE_OUT),
-        )
-
-        # Title Row with Theme Toggle
-        title_row = ft.Row(
-            [ft.Text("Send", size=24, weight=ft.FontWeight.BOLD), theme_toggle],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
         # File Picker
         self.file_picker = ft.FilePicker(on_result=self.pick_files_result)
         page.overlay.append(self.file_picker)
 
-        # Selected Files Section
-        files_label = ft.Text("Selected files", size=16, weight=ft.FontWeight.BOLD)
+        # Title Row
+        title_row = ft.Row(
+            [
+                ft.Text("Croc Send", size=24, weight=ft.FontWeight.BOLD),
+                ft.IconButton(
+                    icon=ft.icons.LIGHT_MODE,
+                    on_click=self.toggle_theme,
+                    tooltip="Toggle theme",
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        # Files Label
+        files_label = ft.Text("Selected Files:", size=16, weight=ft.FontWeight.BOLD)
 
         self.add_files_button = ft.ElevatedButton(
             "Add files",
