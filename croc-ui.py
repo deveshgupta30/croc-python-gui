@@ -13,6 +13,7 @@ class CrocApp:
         self.page = None
         self.selected_files = []
         self.file_picker = None
+        self.file_list = None
 
     def run_croc_command(self, command):
         try:
@@ -65,7 +66,7 @@ class CrocApp:
             self.update_output()
 
             file_paths = " ".join(f'"{file}"' for file in self.selected_files)
-            command = f"croc send {file_paths}"
+            command = f'croc send --code "123456" {file_paths}'
 
             threading.Thread(
                 target=self.run_croc_command, args=(command,), daemon=True
@@ -87,22 +88,46 @@ class CrocApp:
             self.output_control.update()
 
     def pick_files_result(self, e: ft.FilePickerResultEvent):
-        self.selected_files = [file.path for file in e.files] if e.files else []
-        print("Selected files:", self.selected_files)
+        if e.files:
+            self.selected_files.extend([file.path for file in e.files])
+            self.update_file_list()
+
+    def update_file_list(self):
+        if self.file_list:
+            self.file_list.controls = [
+                ft.Row(
+                    [
+                        ft.Text(os.path.basename(current_file), expand=True),
+                        ft.IconButton(
+                            ft.icons.DELETE,
+                            data=current_file,  # Store the file path in the button's data
+                            on_click=lambda e: self.remove_file(e.control.data),
+                        ),
+                    ]
+                )
+                for current_file in self.selected_files
+            ]
+            self.file_list.update()
+
+    def remove_file(self, file):
+        print(f"Removing file: {file}")  # Debug print
+        if file in self.selected_files:
+            self.selected_files.remove(file)
+            self.update_file_list()
 
     def main(self, page: ft.Page):
         self.page = page
         page.title = "Croc Send UI"
         page.theme_mode = ft.ThemeMode.LIGHT
         page.window_width = 800
-        page.window_height = 600
+        page.window_height = 800
 
         self.file_picker = ft.FilePicker(on_result=self.pick_files_result)
         page.overlay.append(self.file_picker)
 
         pick_files_button = ft.ElevatedButton(
-            "Pick files",
-            icon=ft.icons.FOLDER_OPEN,
+            "Add files",
+            icon=ft.icons.ADD,
             on_click=lambda _: self.file_picker.pick_files(allow_multiple=True),
         )
 
@@ -113,6 +138,19 @@ class CrocApp:
                 color={ft.MaterialState.DEFAULT: ft.colors.WHITE},
                 bgcolor={ft.MaterialState.DEFAULT: ft.colors.BLUE},
             ),
+        )
+
+        self.file_list = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            height=200,
+            width=600,
+        )
+
+        file_list_container = ft.Container(
+            content=self.file_list,
+            bgcolor=ft.colors.BLACK12,
+            padding=10,
+            border_radius=10,
         )
 
         self.output_control = ft.Column(
@@ -133,8 +171,12 @@ class CrocApp:
         page.add(
             ft.Column(
                 [
-                    pick_files_button,
-                    start_button,
+                    ft.Row(
+                        [pick_files_button, start_button],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Text("Selected Files:", weight=ft.FontWeight.BOLD, size=16),
+                    file_list_container,
                     ft.Text("Command Output:", weight=ft.FontWeight.BOLD, size=16),
                     output_container,
                 ],
