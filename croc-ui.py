@@ -1,7 +1,7 @@
 import flet as ft
 import subprocess
 import threading
-import time
+import os
 
 
 class CrocApp:
@@ -11,11 +11,12 @@ class CrocApp:
         self.process_running = False
         self.output_control = None
         self.page = None
+        self.selected_files = []
+        self.file_picker = None
 
     def run_croc_command(self, command):
         try:
             self.process_running = True
-            # Print for debugging
             print(f"Starting command: {command}")
 
             self.current_process = subprocess.Popen(
@@ -27,16 +28,14 @@ class CrocApp:
                 universal_newlines=True,
             )
 
-            # Read the output line by line
             for line in iter(self.current_process.stdout.readline, ""):
-                print(f"Raw output: {line}")  # Debug print
+                print(f"Raw output: {line}")
                 if line.strip():
                     self.output_text.append(line.strip())
                     if self.page:
                         self.page.update()
                         self.update_output()
 
-            # Wait for the process to complete
             self.current_process.wait()
             self.output_text.append("Command completed.")
             if self.page:
@@ -45,7 +44,7 @@ class CrocApp:
 
         except Exception as e:
             error_message = f"Error: {str(e)}"
-            print(error_message)  # Debug print
+            print(error_message)
             self.output_text.append(error_message)
             if self.page:
                 self.page.update()
@@ -56,12 +55,18 @@ class CrocApp:
 
     def start_croc_command(self, e):
         if not self.process_running:
+            if not self.selected_files:
+                self.page.show_snack_bar(
+                    ft.SnackBar(content=ft.Text("Please select files to send."))
+                )
+                return
+
             self.output_text = ["Starting new command..."]
             self.update_output()
-            # Use a more basic command for testing
-            command = (
-                'croc send "C:\\Users\\kesha\\Desktop\\Dev\\croc\\python\\croc-ui.py"'
-            )
+
+            file_paths = " ".join(f'"{file}"' for file in self.selected_files)
+            command = f"croc send {file_paths}"
+
             threading.Thread(
                 target=self.run_croc_command, args=(command,), daemon=True
             ).start()
@@ -81,12 +86,25 @@ class CrocApp:
             ]
             self.output_control.update()
 
+    def pick_files_result(self, e: ft.FilePickerResultEvent):
+        self.selected_files = [file.path for file in e.files] if e.files else []
+        print("Selected files:", self.selected_files)
+
     def main(self, page: ft.Page):
         self.page = page
         page.title = "Croc Send UI"
         page.theme_mode = ft.ThemeMode.LIGHT
         page.window_width = 800
         page.window_height = 600
+
+        self.file_picker = ft.FilePicker(on_result=self.pick_files_result)
+        page.overlay.append(self.file_picker)
+
+        pick_files_button = ft.ElevatedButton(
+            "Pick files",
+            icon=ft.icons.FOLDER_OPEN,
+            on_click=lambda _: self.file_picker.pick_files(allow_multiple=True),
+        )
 
         start_button = ft.ElevatedButton(
             "Start Croc Send",
@@ -102,7 +120,7 @@ class CrocApp:
             scroll=ft.ScrollMode.ALWAYS,
             height=300,
             width=600,
-            auto_scroll=True,  # Add auto-scroll
+            auto_scroll=True,
         )
 
         output_container = ft.Container(
@@ -115,6 +133,7 @@ class CrocApp:
         page.add(
             ft.Column(
                 [
+                    pick_files_button,
                     start_button,
                     ft.Text("Command Output:", weight=ft.FontWeight.BOLD, size=16),
                     output_container,
