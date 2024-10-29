@@ -10,6 +10,7 @@ import atexit
 import time
 import asyncio
 import humanize
+from receive import ReceiveApp
 
 
 class CrocApp:
@@ -30,11 +31,12 @@ class CrocApp:
         self.code_text = None
         self.output_expander = None
         self.terminate_button = None
-        self.current_view = "send"  # Track current view
+        self.current_view = "send"
         self.send_toggle = None
         self.receive_toggle = None
         self.main_column = None
         self.terminate_button_visible = False
+        self.receive_app = ReceiveApp(self.page)
         atexit.register(self.cleanup)
 
     def cleanup(self):
@@ -415,11 +417,15 @@ class CrocApp:
         self.current_view = view
         if view == "send":
             self.send_toggle.style.color = ft.colors.ON_SURFACE
+            self.send_toggle.style.bgcolor = ft.colors.TEAL
+            self.receive_toggle.style.bgcolor = ft.colors.BACKGROUND
             self.receive_toggle.style.color = ft.colors.ON_SURFACE_VARIANT
             self.main_column.visible = True
             self.receive_text.visible = False
         else:  # receive view
             self.send_toggle.style.color = ft.colors.ON_SURFACE_VARIANT
+            self.send_toggle.style.bgcolor = ft.colors.BACKGROUND
+            self.receive_toggle.style.bgcolor = ft.colors.TEAL
             self.receive_toggle.style.color = ft.colors.ON_SURFACE
             self.main_column.visible = False
             self.receive_text.visible = True
@@ -458,7 +464,6 @@ class CrocApp:
             self.output_text.append("Command completed.")
 
             # Check different scenarios
-            print("FUIHSHBKSBJ", full_output)
             if "cannot find the path" in full_output:
                 error_dialog = ft.AlertDialog(
                     modal=True,
@@ -794,6 +799,9 @@ class CrocApp:
         page.window.icon = "./assets/crocodile.svg"
         page.on_close = self.cleanup
 
+        self.receive_app = ReceiveApp(page)
+        self.receive_text = self.receive_app.create_receive_layout()
+
         if not await self.check_internet_connection():
             return
 
@@ -860,8 +868,10 @@ class CrocApp:
         # Files Label
         files_label = ft.Text("Selected Files:", size=16, weight=ft.FontWeight.BOLD)
 
+        title_send = ft.Text("Send Files", size=24, weight=ft.FontWeight.BOLD)
+
         self.add_files_button = ft.ElevatedButton(
-            "Add files",
+            "Add Files",
             icon=ft.icons.ADD_ROUNDED,
             on_click=lambda _: self.file_picker.pick_files(allow_multiple=True),
             style=ft.ButtonStyle(
@@ -925,7 +935,7 @@ class CrocApp:
             scroll=ft.ScrollMode.AUTO, height=300, spacing=2
         )
 
-        output_container = ft.Container(
+        self.output_container = ft.Container(
             content=self.output_control,
             bgcolor=ft.colors.with_opacity(0.1, ft.colors.ON_SURFACE),
             padding=10,
@@ -933,36 +943,56 @@ class CrocApp:
             width=440,
         )
 
-        self.output_expander = ft.ExpansionTile(
-            title=ft.Text("Output"),
-            controls=[output_container],
-            initially_expanded=False,
-        )
-
-        # Main content column
         self.main_column = ft.Column(
             [
-                files_label,
-                self.add_files_button,
-                file_list_container,
-                self.send_button,
-                code_container,
-                ft.Row(
-                    [ft.Text(""), self.terminate_button],
-                    alignment=ft.MainAxisAlignment.END,
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text("Send Files", size=24, weight=ft.FontWeight.BOLD),
+                            ft.Container(height=10),
+                            files_label,
+                            ft.Container(height=5),
+                            ft.Row(
+                                [
+                                    self.add_files_button,
+                                    ft.Container(width=10),
+                                    ft.Text(
+                                        "Click to add files for sending",
+                                        size=12,
+                                        italic=True,
+                                        color=ft.colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                alignment=ft.MainAxisAlignment.START,
+                            ),
+                            ft.Container(height=10),
+                            file_list_container,
+                            ft.Container(height=10),
+                            ft.Row(
+                                [
+                                    self.send_button,
+                                    self.terminate_button,
+                                ],
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            ),
+                            ft.Container(height=10),
+                            code_container,
+                        ]
+                    ),
+                    padding=20,
+                    bgcolor=ft.colors.with_opacity(0.05, ft.colors.ON_SURFACE),
+                    border_radius=12,
                 ),
-                self.output_expander,
+                ft.Container(height=20),
+                ft.ExpansionTile(
+                    title=ft.Text("Output", weight=ft.FontWeight.BOLD),
+                    subtitle=ft.Text("Click to expand", italic=True),
+                    controls=[self.output_container],
+                    initially_expanded=False,
+                ),
             ],
             spacing=15,
             horizontal_alignment=ft.CrossAxisAlignment.START,
-        )
-
-        # Receive view text
-        self.receive_text = ft.Text(
-            "Feature under development",
-            size=16,
-            color=ft.colors.ON_SURFACE_VARIANT,
-            visible=False,
         )
 
         # Main Layout
