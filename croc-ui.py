@@ -1,3 +1,4 @@
+import socket
 import flet as ft
 import subprocess
 import threading
@@ -6,6 +7,8 @@ import pyperclip
 import re
 import sys
 import atexit
+import time
+import asyncio
 
 
 class CrocApp:
@@ -41,6 +44,356 @@ class CrocApp:
             except:
                 if self.current_process:
                     self.current_process.kill()
+        self.close_croc_instances()
+
+    def close_croc_instances(self):
+        if sys.platform == "win32":
+            os.system("taskkill /F /IM croc.exe 2>NUL")
+        else:
+            os.system("pkill -9 croc 2>/dev/null")
+
+    def check_winget_available(self):
+        try:
+            subprocess.run(["winget", "--version"], capture_output=True, check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    def check_curl_available(self):
+        try:
+            subprocess.run(["curl", "--version"], capture_output=True, check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    def close_dialog(self, dialog):
+        dialog.open = False
+        self.page.update()
+
+    async def check_internet_connection(self):
+        """Check if there's an internet connection available."""
+        try:
+            # Create and show loading dialog
+            loading_dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(
+                    "Checking Connection", size=20, weight=ft.FontWeight.BOLD
+                ),
+                content=ft.Column(
+                    controls=[
+                        ft.Container(
+                            content=ft.Column(
+                                controls=[
+                                    ft.ProgressRing(width=40, height=40),
+                                    ft.Container(height=10),
+                                    ft.Text(
+                                        "Checking internet connection...",
+                                        size=16,
+                                        text_align=ft.TextAlign.CENTER,
+                                    ),
+                                ],
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            ),
+                            padding=20,
+                        )
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+            )
+            self.page.overlay.append(loading_dialog)
+            loading_dialog.open = True
+            await self.page.update_async()
+
+            # Try to connect to a reliable host
+            socket.create_connection(("8.8.8.8", 53), timeout=3)
+
+            # Close loading dialog
+            loading_dialog.open = False
+            await self.page.update_async()
+
+            return True
+
+        except OSError:
+            # Close loading dialog
+            loading_dialog.open = False
+            await self.page.update_async()
+
+            # Show error dialog
+            error_dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(
+                    "No Internet Connection", size=20, weight=ft.FontWeight.BOLD
+                ),
+                content=ft.Column(
+                    controls=[
+                        ft.Icon(
+                            name=ft.icons.WIFI_OFF_ROUNDED,
+                            color=ft.colors.RED,
+                            size=40,
+                        ),
+                        ft.Container(height=10),
+                        ft.Text(
+                            "Please check your internet connection and try again.",
+                            size=16,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                actions=[
+                    ft.TextButton("OK", on_click=lambda _: sys.exit()),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            self.page.overlay.append(error_dialog)
+            error_dialog.open = True
+            await self.page.update_async()
+
+            return False
+
+    async def check_croc_installed(self):
+        """Check if croc is installed on the system."""
+        loading_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Checking Installation", size=20, weight=ft.FontWeight.BOLD),
+            content=ft.Column(
+                controls=[
+                    ft.Container(
+                        content=ft.Column(
+                            controls=[
+                                ft.ProgressRing(width=40, height=40),
+                                ft.Container(height=10),
+                                ft.Text(
+                                    "Checking if Croc is installed...",
+                                    size=16,
+                                    text_align=ft.TextAlign.CENTER,
+                                ),
+                            ],
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        padding=20,
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
+        self.page.overlay.append(loading_dialog)
+        loading_dialog.open = True
+        await self.page.update_async()
+
+        try:
+            # Run the command asynchronously
+            process = await asyncio.create_subprocess_exec(
+                "croc",
+                "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            try:
+                # Wait for the process to complete with a timeout
+                await asyncio.wait_for(process.communicate(), timeout=5.0)
+
+                loading_dialog.open = False
+                await self.page.update_async()
+
+                if process.returncode == 0:
+                    return True
+                else:
+                    await self.install_croc()
+                    return False
+
+            except asyncio.TimeoutError:
+                # If the process times out, assume croc is not installed
+                loading_dialog.open = False
+                await self.page.update_async()
+                await self.install_croc()
+                return False
+
+        except FileNotFoundError:
+            loading_dialog.open = False
+            await self.page.update_async()
+            await self.install_croc()
+            return False
+
+        except Exception as e:
+            loading_dialog.open = False
+            await self.page.update_async()
+
+            error_dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(
+                    "Installation Check Failed", size=20, weight=ft.FontWeight.BOLD
+                ),
+                content=ft.Column(
+                    controls=[
+                        ft.Icon(
+                            name=ft.icons.ERROR_OUTLINE, color=ft.colors.RED, size=40
+                        ),
+                        ft.Container(height=10),
+                        ft.Text(
+                            f"An error occurred while checking Croc installation:\n{str(e)}",
+                            size=16,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                actions=[
+                    ft.TextButton(
+                        "OK", on_click=lambda _: setattr(error_dialog, "open", False)
+                    ),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            self.page.overlay.append(error_dialog)
+            error_dialog.open = True
+            await self.page.update_async()
+            return False
+
+    async def install_croc(self):
+        def close_dialog(dialog):
+            dialog.open = False
+            self.page.update()
+
+        pass
+
+        def handle_installation():
+            try:
+                if sys.platform == "win32":
+                    if not self.check_winget_available():
+                        raise Exception("Winget is not available on this system.")
+                    subprocess.run(["winget", "install", "schollz.croc"], check=True)
+                else:
+                    if not self.check_curl_available():
+                        raise Exception("Curl is not available on this system.")
+
+                    # Ask for sudo password
+                    sudo_password = self.get_sudo_password()
+                    if sudo_password is None:
+                        raise Exception("Sudo password is required for installation.")
+
+                    command = "curl https://getcroc.schollz.com | sudo -S bash"
+                    process = subprocess.Popen(
+                        command,
+                        shell=True,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    stdout, stderr = process.communicate(input=f"{sudo_password}\n")
+
+                    if process.returncode != 0:
+                        raise Exception(f"Installation failed: {stderr}")
+
+                # Check if installation was successful
+                if self.check_croc_installed():
+                    success_dialog = ft.AlertDialog(
+                        modal=True,
+                        title=ft.Text("Success"),
+                        content=ft.Text("Croc has been successfully installed!"),
+                        actions=[
+                            ft.TextButton(
+                                "OK", on_click=lambda _: close_dialog(success_dialog)
+                            ),
+                        ],
+                        actions_alignment=ft.MainAxisAlignment.END,
+                    )
+                    self.page.overlay.append(success_dialog)
+                    success_dialog.open = True
+                    self.page.update()
+                else:
+                    raise Exception("Installation verification failed")
+
+            except Exception as e:
+                error_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Installation Failed"),
+                    content=ft.Text(
+                        f"Failed to install Croc: {str(e)}\n"
+                        "Please install it manually:\n"
+                        "Windows: winget install schollz.croc\n"
+                        "Linux/MacOS: curl https://getcroc.schollz.com | sudo bash\n"
+                        "For more info, go to https://github.com/schollz/croc"
+                    ),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: close_dialog(error_dialog)
+                        ),
+                    ],
+                    actions_alignment=ft.MainAxisAlignment.END,
+                )
+                self.page.overlay.append(error_dialog)
+                error_dialog.open = True
+                self.page.update()
+
+        install_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Croc Not Found"),
+            content=ft.Text(
+                "Croc is not installed on your system. Would you like to install it now?"
+            ),
+            actions=[
+                ft.TextButton(
+                    "Yes",
+                    on_click=lambda _: (
+                        close_dialog(install_dialog),
+                        handle_installation(),
+                    ),
+                ),
+                ft.TextButton(
+                    "No", on_click=lambda _: (close_dialog(install_dialog), sys.exit())
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.page.overlay.append(install_dialog)
+        install_dialog.open = True
+        self.page.update()
+
+    def get_sudo_password(self):
+        def close_dialog(dialog):
+            dialog.open = False
+            self.page.update()
+
+        password_input = ft.TextField(
+            label="Sudo Password", password=True, can_reveal_password=True
+        )
+
+        def on_submit(_):
+            close_dialog(password_dialog)
+            self.sudo_password = password_input.value
+
+        password_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Sudo Password Required"),
+            content=ft.Column(
+                [
+                    ft.Text("Please enter your sudo password to install Croc:"),
+                    password_input,
+                ]
+            ),
+            actions=[
+                ft.TextButton("Submit", on_click=on_submit),
+                ft.TextButton(
+                    "Cancel", on_click=lambda _: close_dialog(password_dialog)
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        self.sudo_password = None
+        self.page.overlay.append(password_dialog)
+        password_dialog.open = True
+        self.page.update()
+
+        # Wait for the dialog to close
+        while password_dialog.open:
+            time.sleep(0.1)
+
+        return self.sudo_password
 
     def switch_view(self, view):
         self.current_view = view
@@ -299,7 +652,7 @@ class CrocApp:
             else:
                 os.system("pkill -9 croc 2>/dev/null")
 
-    def main(self, page: ft.Page):
+    async def main(self, page: ft.Page):
         self.page = page
         page.window.width = 480
         page.window.height = 700
@@ -315,6 +668,17 @@ class CrocApp:
         )
         page.window.prevent_close = False
         page.window.icon = "./assets/crocodile.svg"
+        page.on_close = self.cleanup
+
+        if not await self.check_internet_connection():
+            return
+
+        if not await self.check_croc_installed():
+            self.install_croc()
+        else:
+            # Continue with the rest of your initialization
+            if self.check_croc_running():
+                self.show_croc_running_dialog()
 
         if self.check_croc_running():
             self.page = page
@@ -503,6 +867,7 @@ def main():
         target=app.main,
         assets_dir="assets",
         web_renderer="html",
+        view=ft.AppView.FLET_APP,
     )
 
 
