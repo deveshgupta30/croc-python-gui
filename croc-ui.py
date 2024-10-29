@@ -9,6 +9,7 @@ import sys
 import atexit
 import time
 import asyncio
+import humanize
 
 
 class CrocApp:
@@ -102,21 +103,21 @@ class CrocApp:
             )
             self.page.overlay.append(loading_dialog)
             loading_dialog.open = True
-            await self.page.update_async()
+            self.page.update()
 
             # Try to connect to a reliable host
             socket.create_connection(("8.8.8.8", 53), timeout=3)
 
             # Close loading dialog
             loading_dialog.open = False
-            await self.page.update_async()
+            self.page.update()
 
             return True
 
         except OSError:
             # Close loading dialog
             loading_dialog.open = False
-            await self.page.update_async()
+            self.page.update()
 
             # Show error dialog
             error_dialog = ft.AlertDialog(
@@ -147,7 +148,7 @@ class CrocApp:
             )
             self.page.overlay.append(error_dialog)
             error_dialog.open = True
-            await self.page.update_async()
+            self.page.update()
 
             return False
 
@@ -179,7 +180,7 @@ class CrocApp:
         )
         self.page.overlay.append(loading_dialog)
         loading_dialog.open = True
-        await self.page.update_async()
+        self.page.update()
 
         try:
             # Run the command asynchronously
@@ -195,7 +196,7 @@ class CrocApp:
                 await asyncio.wait_for(process.communicate(), timeout=5.0)
 
                 loading_dialog.open = False
-                await self.page.update_async()
+                self.page.update()
 
                 if process.returncode == 0:
                     return True
@@ -206,19 +207,19 @@ class CrocApp:
             except asyncio.TimeoutError:
                 # If the process times out, assume croc is not installed
                 loading_dialog.open = False
-                await self.page.update_async()
+                self.page.update()
                 await self.install_croc()
                 return False
 
         except FileNotFoundError:
             loading_dialog.open = False
-            await self.page.update_async()
+            self.page.update()
             await self.install_croc()
             return False
 
         except Exception as e:
             loading_dialog.open = False
-            await self.page.update_async()
+            self.page.update()
 
             error_dialog = ft.AlertDialog(
                 modal=True,
@@ -248,7 +249,7 @@ class CrocApp:
             )
             self.page.overlay.append(error_dialog)
             error_dialog.open = True
-            await self.page.update_async()
+            self.page.update()
             return False
 
     async def install_croc(self):
@@ -395,6 +396,21 @@ class CrocApp:
 
         return self.sudo_password
 
+    def get_file_icon(self, file_path):
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension in [".txt", ".doc", ".docx", ".pdf"]:
+            return ft.icons.DESCRIPTION
+        elif file_extension in [".jpg", ".jpeg", ".png", ".gif", ".bmp"]:
+            return ft.icons.IMAGE
+        elif file_extension in [".mp3", ".wav", ".ogg"]:
+            return ft.icons.AUDIO_FILE
+        elif file_extension in [".mp4", ".avi", ".mov"]:
+            return ft.icons.VIDEO_FILE
+        elif file_extension in [".zip", ".rar", ".7z"]:
+            return ft.icons.FOLDER_ZIP
+        else:
+            return ft.icons.INSERT_DRIVE_FILE
+
     def switch_view(self, view):
         self.current_view = view
         if view == "send":
@@ -423,9 +439,10 @@ class CrocApp:
                 text=True,
                 universal_newlines=True,
             )
-
+            full_output = ""
             for line in iter(self.current_process.stdout.readline, ""):
                 print(f"Raw output: {line}")
+                full_output += line
                 if line.strip():
                     self.output_text.append(line.strip())
                     if "Code is:" in line:
@@ -439,6 +456,56 @@ class CrocApp:
 
             self.current_process.wait()
             self.output_text.append("Command completed.")
+
+            # Check different scenarios
+            print("FUIHSHBKSBJ", full_output)
+            if "cannot find the path" in full_output:
+                error_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Error"),
+                    content=ft.Text("File not found. Please check if the file exists."),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: self.close_dialog(error_dialog)
+                        ),
+                    ],
+                )
+                self.page.overlay.append(error_dialog)
+                error_dialog.open = True
+            elif "peer error: refusing files" in full_output:
+                error_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Transfer Refused"),
+                    content=ft.Text("The recipient refused the file transfer."),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: self.close_dialog(error_dialog)
+                        ),
+                    ],
+                )
+                self.page.overlay.append(error_dialog)
+                error_dialog.open = True
+            elif "100% |" in full_output:
+                success_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Success"),
+                    content=ft.Text("File transfer completed successfully!"),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: self.close_dialog(success_dialog)
+                        ),
+                    ],
+                )
+                self.page.overlay.append(success_dialog)
+                success_dialog.open = True
+
+            # Clear UI elements after transfer
+            self.code_text.visible = False
+            self.copy_button.visible = False
+            self.selected_files.clear()
+            self.update_file_list()
+
+            self.page.update()
             if self.page:
                 self.page.update()
                 self.update_output()
@@ -514,10 +581,16 @@ class CrocApp:
         self.page.update()
 
     def pick_files_result(self, e: ft.FilePickerResultEvent):
-        if e.files:
-            for file in e.files:
-                self.selected_files.append(file.path)
-            self.update_file_list()
+        if not e.files:
+            return
+
+        # Add only files that aren't already in the list
+        new_files = [
+            file.path for file in e.files if file.path not in self.selected_files
+        ]
+
+        self.selected_files.extend(new_files)
+        self.update_file_list()
 
     def check_croc_running(self):
         if sys.platform == "win32":
@@ -589,20 +662,71 @@ class CrocApp:
 
     def update_file_list(self):
         self.file_list.controls.clear()
-        for file in self.selected_files:
-            self.file_list.controls.append(
-                ft.Row(
-                    [
-                        ft.Text(os.path.basename(file), size=12, expand=True),
-                        ft.IconButton(
-                            icon=ft.icons.DELETE_OUTLINE,
-                            on_click=lambda _, file=file: self.remove_file(file),
-                            tooltip="Remove file",
-                        ),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        for index, file in enumerate(self.selected_files):
+            try:
+                file_size = os.path.getsize(file)
+                human_readable_size = humanize.naturalsize(file_size)
+
+                file_item = ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Icon(
+                                        self.get_file_icon(file),
+                                        color=ft.colors.ON_SURFACE_VARIANT,
+                                    ),
+                                    ft.Column(
+                                        [
+                                            ft.Text(
+                                                os.path.basename(file),
+                                                size=14,
+                                                overflow=ft.TextOverflow.ELLIPSIS,
+                                            ),
+                                            ft.Text(
+                                                human_readable_size,
+                                                size=12,
+                                                color=ft.colors.ON_SURFACE_VARIANT,
+                                                weight=ft.FontWeight.W_300,
+                                            ),
+                                        ],
+                                        spacing=2,
+                                        expand=True,
+                                    ),
+                                    ft.IconButton(
+                                        icon=ft.icons.DELETE_OUTLINE,
+                                        on_click=lambda _, file=file: self.remove_file(
+                                            file
+                                        ),
+                                        tooltip="Remove file",
+                                        icon_color=ft.colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            ),
+                            # Add divider if not the last item
+                            (
+                                ft.Divider(
+                                    height=1,
+                                    color=ft.colors.with_opacity(
+                                        0.1, ft.colors.ON_SURFACE
+                                    ),
+                                )
+                                if index < len(self.selected_files) - 1
+                                else ft.Container()
+                            ),
+                        ],
+                    ),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                    border_radius=8,
+                    ink=True,  # Adds ripple effect on click
                 )
-            )
+
+                self.file_list.controls.append(file_item)
+            except OSError as e:
+                print(f"Error accessing file {file}: {e}")
+                continue
+
         self.page.update()
 
     def remove_file(self, file):
