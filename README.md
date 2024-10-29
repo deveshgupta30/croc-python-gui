@@ -23,9 +23,10 @@ Croc is a tool that allows any two computers to simply and securely transfer fil
 
 ## Screenshots
 <p float="left">
-  <img src="https://github.com/user-attachments/assets/602680fb-1bae-47ba-b5d1-50cec492237b" width="300" />
-  <img src="https://github.com/user-attachments/assets/0b6a088b-be37-46f5-8d4a-5e9e8c09eb0e" width="300" />
+  <img src="https://github.com/user-attachments/assets/17f63874-8d85-4216-90a0-fbc24f87976a" width="300" />
+  <img src="https://github.com/user-attachments/assets/a2e50860-d330-48d3-b7b1-fdc5ea2de547" width="300" />
 </p>
+
 
 
 ## Requirements
