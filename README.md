@@ -49,6 +49,7 @@ Run the application:
 6. Custom relay options
 7. System notifications
 8. Bandwidth Limitation
+9. Send folders
 
 ## Contributing
 
