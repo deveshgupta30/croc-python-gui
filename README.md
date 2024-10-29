@@ -41,7 +41,7 @@ Run the application:
 
 ## Upcoming Plans
 
-1. Integrate receive functionality directly into the GUI.<br>
+~~1. Integrate receive functionality directly into the GUI.~~ Implemented<br>
 ~~2. Implement automatic installation of croc if it's not available on the system.~~ Implemented<br>
 3. Progress bar
 4. Drag and drop
