@@ -1,4 +1,11 @@
+
 # Croc GUI
+<p  align="center">    <img  src="assets/crocodile.svg"  alt="CrocGUI Logo"  width="200"/>  </p>
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/deveshgupta30/croc-python-gui)
+![GitHub](https://img.shields.io/github/license/deveshgupta30/croc-python-gui)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Platform](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-lightgrey)
 
 Croc GUI is a graphical user interface for the [croc](https://github.com/schollz/croc) file transfer tool, designed to make secure file transfers easier and more accessible.
 
@@ -8,48 +15,76 @@ Croc is a tool that allows any two computers to simply and securely transfer fil
 
 ## Features
 
-- User-friendly interface for sending files using croc
-- Real-time output display
-- Easy code copying for receiving files
-- Dark and light theme toggle
-- Terminate active transfers
+- 🚀 Simple and intuitive interface for file transfers
+- 📋 Easy code sharing with clipboard integration
+- 🔒 Secure file transfer using Croc's encryption
+- 💻 Cross-platform compatibility (Windows, macOS, Linux)
+- 🎨 Modern and clean UI design
+
+## Screenshots
+<p float="left">
+  <img src="https://github.com/user-attachments/assets/602680fb-1bae-47ba-b5d1-50cec492237b" width="300" />
+  <img src="https://github.com/user-attachments/assets/0b6a088b-be37-46f5-8d4a-5e9e8c09eb0e" width="300" />
+</p>
+
 
 ## Requirements
-
-- Python 3.7+
-- croc installed and available in system PATH
+- Python 3.8 or higher
+- Croc command-line tool installed ([Installation Guide](https://github.com/schollz/croc#install))
+  - The app installs croc if not installed.
 
 ## Installation
 
-1. Clone this repository:
-  ```
+- Clone this repository:
+```
   git clone https://github.com/yourusername/croc-gui.git
   cd croc-gui
-  ```
-2. Install the required Python packages:
+```
+  - Create venv  
+```python -m venv venv```
+  - Activate venv <br>
+Windows: ```.\croc-pui\Scripts\activate```<br>
+Linux/macOS: ```source venv/bin/activate``` <br>
+ - Install the required Python packages:
    ```pip install -r requirements.txt```
 
-
 ## Usage
+Run the app using
+  ```python main.py```
 
-Run the application:
+1. **Send Files**:
+   - Click the "Send File" button 
+   - Wait for the code to be generated
+   - Share the generated code with the recipient
+   - The transfer will begin automatically when the recipient enters the code
 
-1. Click "Add files" to select the files you want to send.
-2. Click "Send" to start the transfer.
-3. Once the transfer starts, a code will be displayed. Share this code with the receiver.
-4. The receiver can use this code with the croc command-line tool to receive the files.
+2. **Receive Files**:
+   - Click the "Receive File" button
+   - Enter the code provided by the sender
+   - Choose your download location
+   - Wait for the transfer to complete
+
 
 ## Upcoming Plans
 
 ~~1. Integrate receive functionality directly into the GUI.~~ Implemented<br>
 ~~2. Implement automatic installation of croc if it's not available on the system.~~ Implemented<br>
-3. Progress bar
-4. Drag and drop
-5. Settings page
-6. Custom relay options
-7. System notifications
-8. Bandwidth Limitation
-9. Send folders
+3. Progress bar<br>
+4. Drag and drop<br>
+5. Settings page<br>
+6. Custom relay options<br>
+7. System notifications<br>
+8. Bandwidth Limitation<br>
+9. Send folders<br>
+
+
+## Dependencies
+
+- **Flet**: Modern Flutter-like UI framework for Python
+- **PyInstaller**: Creates standalone executables
+- **Pyperclip**: Handles clipboard operations
+- **Humanize**: Converts bytes to human-readable formats
+- **Croc**: Core file transfer functionality
 
 ## Contributing
 
@@ -63,6 +98,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Zack Scholl](https://schollz.com/) for creating the amazing [croc](https://github.com/schollz/croc) tool.
 - [Flet](https://flet.dev/) for the Python GUI framework used in this project.
+- Icons8: for providing the application icons and graphics
+- **Python Community**: For the excellent libraries and tools
+- **Contributors**: Everyone who has contributed to making CrocGUI better
+
 
 ## Disclaimer
 
