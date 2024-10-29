@@ -39,6 +39,11 @@ Run the application:
 3. Once the transfer starts, a code will be displayed. Share this code with the receiver.
 4. The receiver can use this code with the croc command-line tool to receive the files.
 
+## Upcoming Plans
+
+1. Integrate receive functionality directly into the GUI.
+2. Implement automatic installation of croc if it's not available on the system.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
