@@ -41,6 +41,13 @@ class CrocApp:
             except:
                 if self.current_process:
                     self.current_process.kill()
+        self.close_croc_instances()
+
+    def close_croc_instances(self):
+        if sys.platform == "win32":
+            os.system("taskkill /F /IM croc.exe 2>NUL")
+        else:
+            os.system("pkill -9 croc 2>/dev/null")
 
     def switch_view(self, view):
         self.current_view = view
@@ -315,6 +322,7 @@ class CrocApp:
         )
         page.window.prevent_close = False
         page.window.icon = "./assets/crocodile.svg"
+        page.on_close = self.cleanup
 
         if self.check_croc_running():
             self.page = page
