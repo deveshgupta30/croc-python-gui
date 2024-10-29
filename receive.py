@@ -3,11 +3,10 @@ import subprocess
 import sys
 import threading
 import flet as ft
-import asyncio
 
 
 class ReceiveApp:
-    def __init__(self, page):
+    def __init__(self, page, toggle_switch_view_callback):
         self.page = page
         self.code_input = None
         self.output_control = None
@@ -18,6 +17,7 @@ class ReceiveApp:
         self.current_process = None
         self.process_running = False
         self.terminate_button = None
+        self.toggle_switch_view_callback = toggle_switch_view_callback
 
     def terminate_process(self, e):
         if self.current_process:
@@ -86,6 +86,7 @@ class ReceiveApp:
             try:
                 self.process_running = True
                 self.toggle_buttons(False)
+                self.toggle_switch_view_callback(False)
                 command = ""
                 if os.name == "nt":  # Windows
                     command = f'croc --yes --out "{self.selected_directory}" {code}'
@@ -138,6 +139,7 @@ class ReceiveApp:
             finally:
                 self.process_running = False
                 self.toggle_buttons(True)
+                self.toggle_switch_view_callback(True)
                 self.current_process = None
 
         # Run the command in a separate thread

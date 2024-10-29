@@ -35,8 +35,9 @@ class CrocApp:
         self.send_toggle = None
         self.receive_toggle = None
         self.main_column = None
+        self.code_note = None
         self.terminate_button_visible = False
-        self.receive_app = ReceiveApp(self.page)
+        self.receive_app = None
         atexit.register(self.cleanup)
 
     def cleanup(self):
@@ -431,10 +432,17 @@ class CrocApp:
             self.receive_text.visible = True
         self.page.update()
 
+    def toggle_switch_view_buttons(self, enabled):
+        if self.send_toggle and self.receive_toggle:
+            self.send_toggle.disabled = not enabled
+            self.receive_toggle.disabled = not enabled
+            self.page.update()
+
     def run_croc_command(self, command):
         try:
             self.process_running = True
             self.toggle_buttons(False)
+            self.toggle_switch_view_buttons(False)
             print(f"Starting command: {command}")
 
             self.current_process = subprocess.Popen(
@@ -507,6 +515,7 @@ class CrocApp:
             # Clear UI elements after transfer
             self.code_text.visible = False
             self.copy_button.visible = False
+            self.code_note.visible = False
             self.selected_files.clear()
             self.update_file_list()
 
@@ -525,6 +534,7 @@ class CrocApp:
         finally:
             self.process_running = False
             self.toggle_buttons(True)
+            self.toggle_switch_view_buttons(True)
             self.current_process = None
 
     def toggle_buttons(self, enabled):
@@ -533,6 +543,7 @@ class CrocApp:
             self.send_button.disabled = not enabled
             self.terminate_button.disabled = enabled
             self.terminate_button.visible = not enabled
+            self.toggle_switch_view_buttons(enabled)
             self.page.update()
 
     def update_code_display(self):
@@ -540,8 +551,16 @@ class CrocApp:
             self.code_text.value = f"Code: {self.croc_code}"
             self.code_text.visible = True
             self.copy_button.visible = True
+            self.code_note.value = (
+                "The copy button copies the code.\n"
+                "If you want to use the code in CLI, use the following:\n"
+                f"Windows: croc {self.croc_code}\n"
+                f'Linux/MacOS: CROC_SECRET="{self.croc_code}" croc'
+            )
+            self.code_note.visible = True
             self.code_text.update()
             self.copy_button.update()
+            self.code_note.update()
 
     def start_croc_command(self, e):
         if not self.process_running:
@@ -746,11 +765,7 @@ class CrocApp:
 
     def copy_code_to_clipboard(self, e):
         if self.croc_code:
-            if sys.platform == "win32":
-                clipboard_text = f"croc {self.croc_code}"
-            else:
-                clipboard_text = f'CROC_SECRET="{self.croc_code}" croc'
-
+            clipboard_text = self.croc_code
             pyperclip.copy(clipboard_text)
             self.page.open(ft.SnackBar(content=ft.Text("Code copied to clipboard!")))
         else:
@@ -761,8 +776,10 @@ class CrocApp:
             self.code_text.visible = False
             self.terminate_button.visible = False
             self.copy_button.visible = False
+            self.code_note.visible = False
             self.code_text.update()
             self.copy_button.update()
+            self.code_note.update()
             try:
                 self.current_process.terminate()
                 self.current_process.wait(timeout=1)
@@ -799,8 +816,9 @@ class CrocApp:
         page.window.icon = "./assets/crocodile.svg"
         page.on_close = self.cleanup
 
-        self.receive_app = ReceiveApp(page)
+        self.receive_app = ReceiveApp(page, self.toggle_switch_view_buttons)
         self.receive_text = self.receive_app.create_receive_layout()
+        self.receive_text.visible = False
 
         if not await self.check_internet_connection():
             return
@@ -914,10 +932,23 @@ class CrocApp:
             tooltip="Copy code",
             visible=False,
         )
+        self.code_note = ft.Text(
+            size=12,
+            color=ft.colors.ON_SURFACE_VARIANT,
+            italic=True,
+            visible=False,
+            selectable=True,
+        )
 
-        code_container = ft.Row(
-            [self.code_text, self.copy_button],
-            alignment=ft.MainAxisAlignment.START,
+        code_container = ft.Column(
+            [
+                ft.Row(
+                    [self.code_text, self.copy_button],
+                    alignment=ft.MainAxisAlignment.START,
+                ),
+                self.code_note,
+            ],
+            spacing=5,
         )
 
         # Terminate Button
@@ -994,6 +1025,7 @@ class CrocApp:
             spacing=15,
             horizontal_alignment=ft.CrossAxisAlignment.START,
         )
+        self.main_column.visible = True
 
         # Main Layout
         page.add(
