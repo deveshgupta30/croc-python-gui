@@ -423,9 +423,10 @@ class CrocApp:
                 text=True,
                 universal_newlines=True,
             )
-
+            full_output = ""
             for line in iter(self.current_process.stdout.readline, ""):
                 print(f"Raw output: {line}")
+                full_output += line
                 if line.strip():
                     self.output_text.append(line.strip())
                     if "Code is:" in line:
@@ -439,6 +440,56 @@ class CrocApp:
 
             self.current_process.wait()
             self.output_text.append("Command completed.")
+
+            # Check different scenarios
+            print("FUIHSHBKSBJ", full_output)
+            if "cannot find the path" in full_output:
+                error_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Error"),
+                    content=ft.Text("File not found. Please check if the file exists."),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: self.close_dialog(error_dialog)
+                        ),
+                    ],
+                )
+                self.page.overlay.append(error_dialog)
+                error_dialog.open = True
+            elif "peer error: refusing files" in full_output:
+                error_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Transfer Refused"),
+                    content=ft.Text("The recipient refused the file transfer."),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: self.close_dialog(error_dialog)
+                        ),
+                    ],
+                )
+                self.page.overlay.append(error_dialog)
+                error_dialog.open = True
+            elif "100% |" in full_output:
+                success_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Success"),
+                    content=ft.Text("File transfer completed successfully!"),
+                    actions=[
+                        ft.TextButton(
+                            "OK", on_click=lambda _: self.close_dialog(success_dialog)
+                        ),
+                    ],
+                )
+                self.page.overlay.append(success_dialog)
+                success_dialog.open = True
+
+            # Clear UI elements after transfer
+            self.code_text.visible = False
+            self.copy_button.visible = False
+            self.selected_files.clear()
+            self.update_file_list()
+
+            self.page.update()
             if self.page:
                 self.page.update()
                 self.update_output()
