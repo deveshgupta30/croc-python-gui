@@ -5,6 +5,6 @@ PyInstaller.__main__.run([
     '--onefile',
     '--windowed',
 	'--noconfirm',
-	'-n CrocUI',
-	'--icon=/assets/crocodile.ico'
+	'-nCrocUI',
+	'-iassets/crocodile.ico'
 ])
