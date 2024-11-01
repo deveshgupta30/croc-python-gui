@@ -54,7 +54,7 @@ Croc is a tool that allows any two computers to simply and securely transfer fil
 ## Usage
 
 Run the app using
-`python main.py`
+`python main.pyw`
 
 1. **Send Files**:
 
