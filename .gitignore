@@ -2,3 +2,7 @@
 /dist
 *.exe
 *.spec
+debug*
+/inst*
+/__pycache__
+/.vscode
